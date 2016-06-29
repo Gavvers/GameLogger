@@ -139,7 +139,13 @@ namespace PSCap
     {
         public GameRecord Record;
         public string comment = "";
-        
+
+        // TODO: Remove skip comment related code when all 
+        // capture files have been converted.
+        // Needed because CaptureFile.Factory is static,
+        // we cannot pass the info otherwise.
+        public static bool SkipCommentDecode {get;set;}
+
         public void setRecord(GameRecord rec)
         {
             Record = rec;
@@ -165,6 +171,9 @@ namespace PSCap
         {
             Record = GameRecord.Factory.Decode(stream);
 
+            if(!SkipCommentDecode)
+                comment = BitOps.DecodeString(stream);
+
             if (Record == null)
                 return false;
 
@@ -176,6 +185,7 @@ namespace PSCap
             List<byte> encoded = new List<byte>();
 
             encoded.AddRange(GameRecord.Factory.Encode(Record));
+            BitOps.EncodeString(encoded, comment);
 
             return encoded;
         }

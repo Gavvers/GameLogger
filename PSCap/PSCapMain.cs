@@ -166,7 +166,8 @@ namespace PSCap
             listView1.Columns.Add("Record Type", 150);
             listView1.Columns.Add("Packet Type", 80);
             listView1.Columns.Add("Packet Name", 170);
-            listView1.Columns.Add("Size", 30);
+            listView1.Columns.Add("Size", 50);
+            listView1.Columns.Add("Comment", 50);
 
             eventImageList.Images.Add(global::PSCap.Properties.Resources.arrow_Up_16xLG_green);
             eventImageList.Images.Add(global::PSCap.Properties.Resources.arrow_Down_16xLG_red);
@@ -399,7 +400,7 @@ namespace PSCap
                     setRecordSizeEstimate(estimatedSize);
                     setRecordCount(cap.getNumRecords());
 
-                    updateCaptureFileState();
+                    updateCaptureFileState();                   
                 }
 
                 this.hexDump.Bytes = null;
@@ -561,7 +562,7 @@ namespace PSCap
             // build the row
             // row: icon | number, time, record name, inner type, name, size
             // TODO: add row caching!
-            string[] row = new string[6];
+            string[] row = new string[7];
 
             // plus 1 to skip internal metadata record
             row[0] = (e.ItemIndex + 1).ToString();
@@ -569,6 +570,7 @@ namespace PSCap
             row[2] = recordName;
             
             row[5] = record.packet.Count.ToString();
+            row[6] = i.getComment();
 
             string packetName = "";
             string packetType = "";
@@ -999,6 +1001,32 @@ namespace PSCap
         private void PSCapMain_DragEnter(object sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop)) e.Effect = DragDropEffects.Copy;
+        }
+
+        private void listView1_MouseDoubleClick(object sender, MouseEventArgs e)
+        {
+            ListViewHitTestInfo info = listView1.HitTest(e.X, e.Y);
+            ListViewItem item = info.Item;
+
+            if(item != null)
+            {
+                string comment = item.SubItems[6].Text;
+
+                RecordComment reccom = new RecordComment(comment);
+                DialogResult result = reccom.ShowDialog(this);
+
+                if(result == DialogResult.OK)
+                {
+                    RecordGame i = captureFile.getRecord(item.Index) as RecordGame;
+                    i.setComment(reccom.Comment);
+                    item.SubItems[6].Text = reccom.Comment;
+
+
+                    //var args = new RetrieveVirtualItemEventArgs(item.Index);
+                    //args.Item = item;
+                    //listView1_RetrieveVirtualItem(listView1, args);
+                }
+            }
         }
     }
 }

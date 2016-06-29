@@ -79,6 +79,10 @@ namespace PSCap
         bool modified = false;
         bool firstSave = true;
 
+        // TODO: Remove skip comment related code when all 
+        // capture files have been converted.
+        bool isPreCommentVersion = false;
+
         public static class Factory
         {
             public static CaptureFile New()
@@ -95,6 +99,7 @@ namespace PSCap
             public static CaptureFile FromFile(string filename, Form parent, ProgressDialog progress)
             {
                 CaptureFile cap = new CaptureFile();
+                var records = new List<Record>();
 
                 // read the header and verify the checksum and magic
                 using (FileStream file = File.Open(filename, FileMode.Open, FileAccess.Read))
@@ -118,6 +123,8 @@ namespace PSCap
                     int stepStride = (int)header.RecordCount / 20;
                     int nextStepPoint = stepStride;
 
+                    int metadataEndPos = 0;
+
                     parent.SafeInvoke((a) => progress.ProgressParams((int)header.RecordCount, stepStride));
 
                     for (UInt64 i = 0; i < header.RecordCount; i++)
@@ -131,9 +138,13 @@ namespace PSCap
                                 case RecordType.GAME:
                                     //if (i % 1000 == 0)
                                     //    Log.Debug("Game record {0}", i);
-                                    cap.addRecord(rec);
+                                    //cap.addRecord(rec);
+                                    records.Add(rec);
                                     break;
                                 case RecordType.METADATA:
+                                    if (metaFound && cap.isPreCommentVersion)
+                                        continue;
+
                                     if (metaFound)
                                         throw new InvalidCaptureFileException("Multiple metadata records");
 
@@ -141,6 +152,7 @@ namespace PSCap
                                     cap.captureDescription = meta.description;
                                     cap.captureName = meta.captureName;
                                     metaFound = true;
+                                    metadataEndPos = stream.position();
                                     break;
                             }
 
@@ -156,7 +168,20 @@ namespace PSCap
                         }
                         catch(InvalidCaptureFileException e)
                         {
-                            throw new InvalidCaptureFileException(e.Message + string.Format(" at record {0}", i), e);
+                            // It is possible that this is thrown when attempting to decode
+                            // a GCAP file that does not have comments encoded.
+                            // Let's try again and decode without comments.
+
+                            // We tried already, just rethrow.
+                            if(cap.isPreCommentVersion)
+                                throw new InvalidCaptureFileException(e.Message + string.Format(" at record {0}", i), e);
+
+                            cap.isPreCommentVersion = true;
+                            RecordGame.SkipCommentDecode = true; // Unfortunate, but no other way.
+                            i = 0; // First record should be metadata, which we can skip.
+                            records.Clear();
+                            stream.seek(metadataEndPos);
+                            continue;
                         }
                     }
 
@@ -164,6 +189,7 @@ namespace PSCap
                         Log.Warning("Capture file is missing a metadata record. Please resave to fix this.");
                 }
 
+                cap.records.AddRange(records);
                 cap.existingCapture(filename);
 
                 return cap;
@@ -301,7 +327,7 @@ namespace PSCap
                 }
                 catch (NeedMoreDataException)
                 {
-                    // undo any failed processing
+                    //undo any failed processing
                     streamBuffer.seek(startPos);
                     return null;
                 }
@@ -426,6 +452,8 @@ namespace PSCap
                 modified = true;
             }
         }
+
+        public bool IsPreCommentVersion { get { return isPreCommentVersion; } }
 
         public bool isFirstSave()
         {
